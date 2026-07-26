@@ -176,6 +176,18 @@ public class BlurView extends FrameLayout {
         notifyRotationChanged(rotation);
     }
 
+    @Override
+    public void setScaleX(float scaleX) {
+        super.setScaleX(scaleX);
+        notifyScaleXChanged(scaleX);
+    }
+
+    @Override
+    public void setScaleY(float scaleY) {
+        super.setScaleY(scaleY);
+        notifyScaleYChanged(scaleY);
+    }
+
     @SuppressLint("NewApi")
     public void notifyRotationChanged(float rotation) {
         if (usingRenderNode()) {

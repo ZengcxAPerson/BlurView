@@ -110,14 +110,28 @@ public class RenderNodeBlurController implements BlurController {
     }
 
     private void updateRenderNodeProperties() {
-        float layoutTranslationX = -getLeft();
-        float layoutTranslationY = -getTop();
+        float scaleX = blurView.getScaleX();
+        float scaleY = blurView.getScaleY();
 
-        // Pivot point for the rotation and scale (in case it's applied)
+        // getLocationOnScreen returns the visual position of the view's local (0,0), which includes
+        // the effect of the view's own scale transform. We need the layout position (before the
+        // view's own scale is applied) to correctly position the blurNode pivot and translation.
+        // Recovery formula: layout_pos = visual_pos + pivot * (scale - 1)
+        float layoutLeft = getLeft() + blurView.getPivotX() * (scaleX - 1);
+        float layoutTop = getTop() + blurView.getPivotY() * (scaleY - 1);
+
+        float layoutTranslationX = -layoutLeft;
+        float layoutTranslationY = -layoutTop;
+
+        // Pivot at the center of the BlurView in target coordinates, invariant under scale.
         blurNode.setPivotX(blurView.getWidth() / 2f - layoutTranslationX);
         blurNode.setPivotY(blurView.getHeight() / 2f - layoutTranslationY);
         blurNode.setTranslationX(layoutTranslationX);
         blurNode.setTranslationY(layoutTranslationY);
+        // Counter-scale the blurNode so the visually expanded area shows the correct underlying
+        // content rather than a magnified version of the original (unscaled) region.
+        blurNode.setScaleX(1f / scaleX);
+        blurNode.setScaleY(1f / scaleY);
 
         if (Build.VERSION.SDK_INT == Build.VERSION_CODES.S) {
             // There's a bug on API 31 - blurNode doesn't get re-rendered on setting new translation/scale/rotation,
