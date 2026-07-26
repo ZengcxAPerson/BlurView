@@ -177,26 +177,10 @@ public final class PreDrawBlurController implements BlurController {
         rootView.getLocationOnScreen(rootLocation);
         blurView.getLocationOnScreen(blurViewLocation);
 
-        float scaleX = blurView.getScaleX();
-        float scaleY = blurView.getScaleY();
-        float pivotX = blurView.getPivotX();
-        float pivotY = blurView.getPivotY();
-        float rotationDeg = blurView.getRotation();
-        float cosR = (float) Math.cos(Math.toRadians(rotationDeg));
-        float sinR = (float) Math.sin(Math.toRadians(rotationDeg));
+        BlurViewTransform t = BlurViewTransform.compute(blurView, blurViewLocation, rootLocation);
 
-        float visualLeft = blurViewLocation[0] - rootLocation[0];
-        float visualTop = blurViewLocation[1] - rootLocation[1];
-
-        // getLocationOnScreen returns the visual position of the view's local (0,0), which includes
-        // the effect of the view's own scale and rotation transforms. Recover the layout position
-        // (before those transforms) to find the BlurView's center in root coordinates, which is
-        // invariant under the view's own transforms.
-        float layoutLeft = visualLeft + pivotX * (scaleX * cosR - 1) - pivotY * scaleY * sinR;
-        float layoutTop = visualTop + pivotY * (scaleY * cosR - 1) + pivotX * scaleX * sinR;
-
-        float rootCenterX = layoutLeft + blurView.getWidth() / 2f;
-        float rootCenterY = layoutTop + blurView.getHeight() / 2f;
+        float rootCenterX = t.layoutLeft + blurView.getWidth() / 2f;
+        float rootCenterY = t.layoutTop + blurView.getHeight() / 2f;
 
         float scaleFactorH = (float) blurView.getHeight() / internalBitmap.getHeight();
         float scaleFactorW = (float) blurView.getWidth() / internalBitmap.getWidth();
@@ -212,12 +196,12 @@ public final class PreDrawBlurController implements BlurController {
         // When draw() renders this bitmap onto the view's local canvas and the view system then
         // applies the view's own rotation R and scale, the content matches the background exactly.
         internalCanvas.translate(bitmapCenterX, bitmapCenterY);
-        internalCanvas.rotate(-rotationDeg);
-        internalCanvas.scale(1f / (scaleFactorW * scaleX), 1f / (scaleFactorH * scaleY));
+        internalCanvas.rotate(-t.rotationDeg);
+        internalCanvas.scale(1f / (scaleFactorW * t.scaleX), 1f / (scaleFactorH * t.scaleY));
         internalCanvas.translate(-rootCenterX, -rootCenterY);
 
-        capturedScaleX = scaleX;
-        capturedScaleY = scaleY;
+        capturedScaleX = t.scaleX;
+        capturedScaleY = t.scaleY;
     }
 
     @Override
