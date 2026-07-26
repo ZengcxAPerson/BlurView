@@ -112,26 +112,40 @@ public class RenderNodeBlurController implements BlurController {
     private void updateRenderNodeProperties() {
         float scaleX = blurView.getScaleX();
         float scaleY = blurView.getScaleY();
+        float pivotX = blurView.getPivotX();
+        float pivotY = blurView.getPivotY();
+        float rotationDeg = blurView.getRotation();
+        float rotation = (float) Math.toRadians(rotationDeg);
+        float cosR = (float) Math.cos(rotation);
+        float sinR = (float) Math.sin(rotation);
 
-        // getLocationOnScreen returns the visual position of the view's local (0,0), which includes
-        // the effect of the view's own scale transform. We need the layout position (before the
-        // view's own scale is applied) to correctly position the blurNode pivot and translation.
-        // Recovery formula: layout_pos = visual_pos + pivot * (scale - 1)
-        float layoutLeft = getLeft() + blurView.getPivotX() * (scaleX - 1);
-        float layoutTop = getTop() + blurView.getPivotY() * (scaleY - 1);
+        // getLocationOnScreen returns the visual position of the view's local (0,0) in screen
+        // coordinates, which accounts for the view's own scale and rotation transforms.
+        // We need the layout position (before those transforms) for the blurNode pivot and
+        // translation to be correct.
+        //
+        // The view's transform maps local (0,0) to parent as:
+        //   visual = layout + pivot - Scale * Rotate * pivot
+        // where Scale and Rotate act around the pivot point. Inverting:
+        //   layout_left = visual_left + pivotX * (scaleX * cosR - 1) - pivotY * scaleY * sinR
+        //   layout_top  = visual_top  + pivotY * (scaleY * cosR - 1) + pivotX * scaleX * sinR
+        float layoutLeft = getLeft() + pivotX * (scaleX * cosR - 1) - pivotY * scaleY * sinR;
+        float layoutTop = getTop() + pivotY * (scaleY * cosR - 1) + pivotX * scaleX * sinR;
 
         float layoutTranslationX = -layoutLeft;
         float layoutTranslationY = -layoutTop;
 
-        // Pivot at the center of the BlurView in target coordinates, invariant under scale.
+        // Pivot at the center of the BlurView in target coordinates, invariant under the view's transforms.
         blurNode.setPivotX(blurView.getWidth() / 2f - layoutTranslationX);
         blurNode.setPivotY(blurView.getHeight() / 2f - layoutTranslationY);
         blurNode.setTranslationX(layoutTranslationX);
         blurNode.setTranslationY(layoutTranslationY);
-        // Counter-scale the blurNode so the visually expanded area shows the correct underlying
-        // content rather than a magnified version of the original (unscaled) region.
+        // Counter-scale so the visually expanded area shows the correct underlying content.
         blurNode.setScaleX(1f / scaleX);
         blurNode.setScaleY(1f / scaleY);
+        // Counter-rotate so the blurred content stays aligned with the background rather than
+        // rotating with the BlurView.
+        blurNode.setRotationZ(-rotationDeg);
 
         if (Build.VERSION.SDK_INT == Build.VERSION_CODES.S) {
             // There's a bug on API 31 - blurNode doesn't get re-rendered on setting new translation/scale/rotation,
