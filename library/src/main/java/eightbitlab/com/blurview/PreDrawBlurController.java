@@ -57,6 +57,11 @@ public final class PreDrawBlurController implements BlurController {
     private float lastRotation = Float.NaN;
     private boolean forceNextCapture;
 
+    // Scale factors captured during the last setupInternalCanvasMatrix call, used to compensate
+    // blur radius so the perceived blur strength stays constant regardless of view scale.
+    private float capturedScaleX = 1f;
+    private float capturedScaleY = 1f;
+
     private final ViewTreeObserver.OnPreDrawListener drawListener = new ViewTreeObserver.OnPreDrawListener() {
         @Override
         public boolean onPreDraw() {
@@ -210,6 +215,9 @@ public final class PreDrawBlurController implements BlurController {
         internalCanvas.rotate(-rotationDeg);
         internalCanvas.scale(1f / (scaleFactorW * scaleX), 1f / (scaleFactorH * scaleY));
         internalCanvas.translate(-rootCenterX, -rootCenterY);
+
+        capturedScaleX = scaleX;
+        capturedScaleY = scaleY;
     }
 
     @Override
@@ -247,7 +255,10 @@ public final class PreDrawBlurController implements BlurController {
     }
 
     private void blurAndSave() {
-        displayBitmap = blurAlgorithm.blur(internalBitmap, blurRadius);
+        // The bitmap packs scaleX*scaleY more content than at scale=1. Divide the blur radius by
+        // the average scale so the perceived blur strength stays constant on screen.
+        float scaleCompensation = (capturedScaleX + capturedScaleY) / 2f;
+        displayBitmap = blurAlgorithm.blur(internalBitmap, blurRadius / scaleCompensation);
         if (!blurAlgorithm.canModifyBitmap()) {
             // New bitmap each frame, so re-record the display list to draw it. In-place algorithms
             // keep the same instance, which HWUI re-samples without an invalidate.
