@@ -18,15 +18,15 @@ import androidx.annotation.RequiresApi;
  * This snapshot is used by the BlurView to apply blur effect.
  */
 public class BlurTarget extends FrameLayout {
-    // RenderNode is available from API 29. The snapshot it records is used by both the RenderEffect
-    // (31+) and the OpenGL (29-30) blur paths.
-    static final boolean canRecordRenderNode = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q;
     // RenderEffect is available from API 31, enabling the fully hardware-accelerated blur path.
     static final boolean canUseHardwareRendering = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S;
-    // API 29-30: RenderNode snapshot is available but RenderEffect is not, so the OpenGL path is used.
+    // API 29-30: RenderEffect is not available, so the OpenGL path is used with a software snapshot.
+    // The OpenGL path draws the target onto a software canvas, so it does NOT use the RenderNode.
     // This is the only path that reads contentGeneration; the other paths leave it untouched.
-    static final boolean usesOpenGLBlur = canRecordRenderNode && !canUseHardwareRendering;
+    static final boolean usesOpenGLBlur = !canUseHardwareRendering
+            && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q;
 
+    @Nullable
     RenderNode renderNode;
 
     // Content version counter, read across frames by the OpenGL blur controller (UI thread) to skip
@@ -37,7 +37,7 @@ public class BlurTarget extends FrameLayout {
     int contentGeneration;
 
     {
-        if (canRecordRenderNode) {
+        if (canUseHardwareRendering) {
             renderNode = new RenderNode("BlurViewHost node");
         }
     }
@@ -61,7 +61,7 @@ public class BlurTarget extends FrameLayout {
 
     @Override
     protected void dispatchDraw(@NonNull Canvas canvas) {
-        if (canRecordRenderNode && canvas.isHardwareAccelerated()) {
+        if (canUseHardwareRendering && canvas.isHardwareAccelerated()) {
             renderNode.setPosition(0, 0, getWidth(), getHeight());
             RecordingCanvas recordingCanvas = renderNode.beginRecording();
             super.dispatchDraw(recordingCanvas);
