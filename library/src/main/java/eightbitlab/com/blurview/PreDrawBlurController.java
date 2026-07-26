@@ -52,6 +52,9 @@ public final class PreDrawBlurController implements BlurController {
     private int lastGeneration = -1;
     private int lastLeft = Integer.MIN_VALUE;
     private int lastTop = Integer.MIN_VALUE;
+    private float lastScaleX = Float.NaN;
+    private float lastScaleY = Float.NaN;
+    private float lastRotation = Float.NaN;
     private boolean forceNextCapture;
 
     private final ViewTreeObserver.OnPreDrawListener drawListener = new ViewTreeObserver.OnPreDrawListener() {
@@ -169,18 +172,44 @@ public final class PreDrawBlurController implements BlurController {
         rootView.getLocationOnScreen(rootLocation);
         blurView.getLocationOnScreen(blurViewLocation);
 
-        int left = blurViewLocation[0] - rootLocation[0];
-        int top = blurViewLocation[1] - rootLocation[1];
+        float scaleX = blurView.getScaleX();
+        float scaleY = blurView.getScaleY();
+        float pivotX = blurView.getPivotX();
+        float pivotY = blurView.getPivotY();
+        float rotationDeg = blurView.getRotation();
+        float cosR = (float) Math.cos(Math.toRadians(rotationDeg));
+        float sinR = (float) Math.sin(Math.toRadians(rotationDeg));
 
-        // https://github.com/Dimezis/BlurView/issues/128
+        float visualLeft = blurViewLocation[0] - rootLocation[0];
+        float visualTop = blurViewLocation[1] - rootLocation[1];
+
+        // getLocationOnScreen returns the visual position of the view's local (0,0), which includes
+        // the effect of the view's own scale and rotation transforms. Recover the layout position
+        // (before those transforms) to find the BlurView's center in root coordinates, which is
+        // invariant under the view's own transforms.
+        float layoutLeft = visualLeft + pivotX * (scaleX * cosR - 1) - pivotY * scaleY * sinR;
+        float layoutTop = visualTop + pivotY * (scaleY * cosR - 1) + pivotX * scaleX * sinR;
+
+        float rootCenterX = layoutLeft + blurView.getWidth() / 2f;
+        float rootCenterY = layoutTop + blurView.getHeight() / 2f;
+
         float scaleFactorH = (float) blurView.getHeight() / internalBitmap.getHeight();
         float scaleFactorW = (float) blurView.getWidth() / internalBitmap.getWidth();
+        float bitmapCenterX = internalBitmap.getWidth() / 2f;
+        float bitmapCenterY = internalBitmap.getHeight() / 2f;
 
-        float scaledLeftPosition = -left / scaleFactorW;
-        float scaledTopPosition = -top / scaleFactorH;
-
-        internalCanvas.translate(scaledLeftPosition, scaledTopPosition);
-        internalCanvas.scale(1 / scaleFactorW, 1 / scaleFactorH);
+        // Capture the root content that is visually beneath the BlurView:
+        //  1. Shift root so the BlurView's invariant center is at the origin
+        //  2. Counter-rotate by -R so the captured slice is axis-aligned in the bitmap
+        //  3. Scale down to bitmap size, also accounting for the view's own scale so the full
+        //     visual area (layout bounds × scaleX/Y) fits into the bitmap
+        //  4. Shift to bitmap center
+        // When draw() renders this bitmap onto the view's local canvas and the view system then
+        // applies the view's own rotation R and scale, the content matches the background exactly.
+        internalCanvas.translate(bitmapCenterX, bitmapCenterY);
+        internalCanvas.rotate(-rotationDeg);
+        internalCanvas.scale(1f / (scaleFactorW * scaleX), 1f / (scaleFactorH * scaleY));
+        internalCanvas.translate(-rootCenterX, -rootCenterY);
     }
 
     @Override
@@ -238,14 +267,23 @@ public final class PreDrawBlurController implements BlurController {
         blurView.getLocationOnScreen(blurViewLocation);
         int left = blurViewLocation[0] - rootLocation[0];
         int top = blurViewLocation[1] - rootLocation[1];
+        float scaleX = blurView.getScaleX();
+        float scaleY = blurView.getScaleY();
+        float rotation = blurView.getRotation();
         boolean changed = forceNextCapture
                 || generation != lastGeneration
                 || left != lastLeft
-                || top != lastTop;
+                || top != lastTop
+                || scaleX != lastScaleX
+                || scaleY != lastScaleY
+                || rotation != lastRotation;
         forceNextCapture = false;
         lastGeneration = generation;
         lastLeft = left;
         lastTop = top;
+        lastScaleX = scaleX;
+        lastScaleY = scaleY;
+        lastRotation = rotation;
         return changed;
     }
 
